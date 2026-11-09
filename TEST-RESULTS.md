@@ -432,3 +432,58 @@ produced `/tmp/mcp-fix2/api/mcp.js`, `src/portfolio.js`,
   rather than `/var/task/index.js` — if it still says `index.js`,
   Vercel is serving a stale build and the deployment needs a fresh
   commit (empty commit) rather than a dashboard redeploy.
+
+## Vercel fix 3 — explicit builds config (9 Nov 2026 ~10:30 PKT)
+
+Context: after Fix 2 (renamed src/index.ts → src/stdio.ts, src/server.ts →
+src/portfolio.ts, head commit bb402aa), every Vercel build from the renamed
+code FAILED with "No entrypoint found in /vercel/path0" — the "Node"
+framework preset REQUIRES a server entrypoint, so removing the trigger
+filenames removed the entrypoint. Production still serves old commit
+e26d24c, /api/mcp still 500 ('Invalid export found in module
+"/var/task/server.js"'). Fix 3 bypasses framework auto-detection entirely
+with an explicit legacy builds config. No files renamed back, no
+main/bin re-added to package.json, no src/ or api/mcp.ts logic changed.
+
+New vercel.json (validated as JSON with node, "functions" key removed —
+builds and functions must not conflict):
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "builds": [{ "src": "api/mcp.ts", "use": "@vercel/node" }],
+  "routes": [{ "src": "/api/mcp", "dest": "/api/mcp.ts" }]
+}
+```
+
+Build: `npm run build` → exit 0 (tsc, dist/http.js, dist/portfolio.js,
+dist/projects.js, dist/stdio.js).
+
+Local regression — all 12 checks PASSED (harness /tmp/test-fix3.mjs,
+exit 0). Real outputs:
+
+- A. stdio (node dist/stdio.js): initialize OK — serverInfo
+  { name: "sarim-portfolio-mcp", version: "1.0.0" }, protocolVersion
+  2024-11-05; tools/list = exactly get_profile, list_projects,
+  get_project; list_projects = exactly core-x, webnexai, bitecraft;
+  get_project bitecraft → links.site =
+  https://snack-store-six.vercel.app/; get_project unknown-project →
+  clean error, isError true, "Unknown project: \"unknown-project\".
+  Valid project ids are: core-x, webnexai, bitecraft."
+- B. HTTP (node dist/http.js, PORT=3101): GET / → 200 info JSON
+  { status: "ok", name: "sarim-portfolio-mcp", version: "1.0.0",
+  transport: "streamable-http (stateless)", mcpEndpoint: "/mcp",
+  tools: [get_profile, list_projects, get_project] }; POST /mcp
+  initialize → 200; POST /mcp tools/list → 200, exactly 3 tools.
+- C. api/mcp.ts handler (compiled to /tmp/mcp-api-test with a temp
+  tsconfig, run behind a plain node:http wrapper — the handler reads
+  the request stream when req.body is unset, same fallback path as on
+  Vercel): GET /api/mcp → 200 info JSON (mcpEndpoint "/api/mcp");
+  POST /api/mcp initialize → 200; POST /api/mcp tools/list → 200,
+  exactly 3 tools; POST /api/mcp get_project core-x → 200, response
+  contains https://simple-landing-page-gym.vercel.app/.
+
+Grep: no "vynote", "ashlee" or "quiz" in src/ or api/.
+
+NOT done: no GitHub push, no Vercel deploy — redeploy happens separately
+via the browser after this fix.
