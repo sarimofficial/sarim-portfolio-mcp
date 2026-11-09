@@ -195,3 +195,111 @@ The entry was compiled with `tsc` to a temp dir (`/tmp/mcp-vc`,
 - No Claude Code / Claude Desktop integration test for the HTTP
   transport; the stdio integration is unchanged and still the local
   route (see README.md).
+
+## Update — 9 Nov 2026 ~10:15 PKT (Vercel fix: 500 FUNCTION_INVOCATION_FAILED)
+
+### What happened on Vercel (verified from runtime logs, reported by parent)
+
+GitHub repo sarimofficial/sarim-portfolio-mcp was created and Vercel
+deployed it to Production, but GET
+https://sarim-portfolio-mcp.vercel.app/api/mcp returned 500
+FUNCTION_INVOCATION_FAILED. Runtime log: "sarim-portfolio-mcp running
+over stdio / No exports found in module "/var/task/index.js". / Did you
+forget to export a function or a server?" — Vercel ran the stdio entry
+(package.json "main": "dist/index.js") as the serverless function
+instead of api/mcp.ts. api/mcp.ts itself was correct and had passed a
+local node:http wrapper test.
+
+### What changed (local folder only — NO push, NO deploy)
+
+- `package.json` — REMOVED the `"main": "dist/index.js"` field and the
+  `"bin": { "sarim-portfolio-mcp": "dist/index.js" }` field. Those are
+  what made Vercel treat the stdio entry as the function entry. Kept:
+  `"start"` (`node dist/index.js`), `"start:http"`
+  (`node dist/http.js`), `"build"` (`tsc`), name, version,
+  description, dependencies, devDependencies, license, `"type":
+  "module"`. Verified by grep: no `"main"` / `"bin"` remains.
+- `vercel.json` — now explicit (was schema-only):
+  `{"$schema": "https://openapi.vercel.sh/vercel.json", "functions":
+  {"api/mcp.ts": {"maxDuration": 10}}}`. maxDuration 10 is the Vercel
+  Hobby-plan limit — a higher value would fail the deploy on Hobby.
+  No env vars, no secrets, no rewrites, no framework settings added.
+- `src/`, `api/mcp.ts`, `src/projects.ts` — UNCHANGED. Grep clean:
+  no vynote / ashlee / quiz anywhere in src/, api/, package.json or
+  vercel.json.
+
+### Build
+
+- `npm run build` — exit 0. `dist/` contains `index.js`, `server.js`,
+  `http.js`, `projects.js` (unchanged set).
+- `npx tsc api/mcp.ts src/server.ts src/projects.ts --outDir
+  /tmp/mcp-vc2 --rootDir . --module NodeNext --moduleResolution
+  NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict`
+  — exit 0. Output: `/tmp/mcp-vc2/api/mcp.js`,
+  `/tmp/mcp-vc2/src/server.js`, `/tmp/mcp-vc2/src/projects.js` — the
+  `../src/server.js` import resolves correctly. (The temp dir needed a
+  symlink to the project's node_modules for the SDK import; that is a
+  test-harness detail only, not a project change.)
+
+### Stdio regression test (after the fix)
+
+Harness: `/tmp/test-stdio-fix.mjs` — spawns `node dist/index.js`.
+ALL CHECKS PASSED (exit 0):
+
+| Step | Result |
+| --- | --- |
+| `initialize` | PASS — serverInfo `{ name: "sarim-portfolio-mcp", version: "1.0.0" }` |
+| `tools/list` | PASS — exactly 3 tools: `get_profile`, `list_projects`, `get_project` |
+| `tools/call list_projects` | PASS — exactly 3: `core-x`, `webnexai`, `bitecraft` |
+| `tools/call get_project` (`bitecraft`) | PASS — link `https://snack-store-six.vercel.app/` returned |
+| `tools/call get_project` (`unknown-project`) | PASS — clean error, `isError: true`, `Unknown project: "unknown-project". Valid project ids are: core-x, webnexai, bitecraft.` |
+
+### Local HTTP regression test (src/http.ts, port 3101)
+
+`PORT=3101 node dist/http.js`, curl checks. ALL PASSED:
+
+| Request | Result |
+| --- | --- |
+| GET / | HTTP 200 — `{"status":"ok","name":"sarim-portfolio-mcp","version":"1.0.0","transport":"streamable-http (stateless)","mcpEndpoint":"/mcp","tools":["get_profile","list_projects","get_project"]}` |
+| POST /mcp `initialize` | HTTP 200 — `protocolVersion: "2024-11-05"`, serverInfo `sarim-portfolio-mcp 1.0.0` (SSE `event: message`) |
+| POST /mcp `tools/list` | HTTP 200 — exactly 3 tools: `get_profile`, `list_projects`, `get_project` |
+
+### Vercel entry test (api/mcp.ts compiled to /tmp/mcp-vc2)
+
+Harness: `/tmp/test-vercel-entry-fix.mjs` — plain node:http wrapper
+around the compiled handler (same approach as the 10:05 PKT test).
+ALL CHECKS PASSED:
+
+| Request | Result |
+| --- | --- |
+| GET /api/mcp | HTTP 200, JSON info (`status: "ok"`, `mcpEndpoint: "/api/mcp"`, tools list) |
+| POST /api/mcp `initialize` (raw stream body) | HTTP 200 — serverInfo `sarim-portfolio-mcp 1.0.0` |
+| POST /api/mcp `tools/list` (pre-parsed `req.body`, as Vercel provides) | HTTP 200 — exactly 3 tools |
+| POST /api/mcp `tools/call get_project core-x` (raw stream body) | HTTP 200 — full Core X details, link `https://simple-landing-page-gym.vercel.app/` |
+| POST /api/mcp `tools/call get_project` (unknown id) | HTTP 200 with `isError: true` — `Unknown project: "nope". Valid project ids are: core-x, webnexai, bitecraft.` |
+
+### Remaining risk for the Vercel build
+
+- The fix removes the trigger (no `main`/`bin` for Vercel to mistake
+  for a function entry) and pins `api/mcp.ts` as the function in
+  `vercel.json`, so the new deployment should build a function from
+  `api/mcp.ts`, not from `dist/index.js`. The local `tsc` compile
+  proves the `../src/server.js` import resolves; Vercel's own bundler
+  (@vercel/node) resolving that relative import is the one step that
+  can only be proven by the real Vercel build — it is the standard
+  supported pattern (functions importing from outside `api/`), so the
+  risk is low but not zero.
+- IMPORTANT for the redeploy step: this local folder is NOT a git
+  repository (`git status` reports "not a git repository"), so the
+  changed `package.json` / `vercel.json` / `TEST-RESULTS.md` are NOT
+  in GitHub yet. A plain "Redeploy" in the Vercel dashboard would
+  redeploy the OLD commit and the 500 would come back. The fix must
+  be pushed to https://github.com/sarimofficial/sarim-portfolio-mcp
+  FIRST, then Vercel redeployed from the new commit.
+- After redeploy, verify with: GET
+  https://sarim-portfolio-mcp.vercel.app/api/mcp (expect 200 info
+  JSON) and POST initialize (expect 200). If it still 500s, read the
+  new runtime log: the failing module path should now be `api/mcp`
+  rather than `/var/task/index.js` — if it still says `index.js`,
+  Vercel is serving a stale build and the deployment needs a fresh
+  commit (empty commit) rather than a dashboard redeploy.
