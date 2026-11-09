@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless Function entry for the Portfolio MCP server.
  *
- * Serves the SAME shared Portfolio MCP server (see ../src/server.ts)
+ * Serves the SAME shared Portfolio MCP server (see ../src/portfolio.ts)
  * over Streamable HTTP at /api/mcp, in stateless mode — Vercel
  * serverless functions keep no state between invocations, so every
  * request gets a fresh server + transport (sessionIdGenerator:
@@ -10,14 +10,14 @@
  * How Vercel runs this file:
  *   - Files in api/ become serverless functions; this one maps to
  *     POST /api/mcp (and GET /api/mcp for a health/info response).
- *   - Vercel bundles the relative import ../src/server.js together
+ *   - Vercel bundles the relative import ../src/portfolio.js together
  *     with this file (the .js extension is the NodeNext convention
- *     for importing the ../src/server.ts source).
+ *     for importing the ../src/portfolio.ts source).
  *   - Vercel parses JSON request bodies automatically and puts the
  *     result on req.body; if a body was not pre-parsed, the raw
  *     request stream is read instead.
  *
- * The stdio version (src/index.ts) is untouched — this file only adds
+ * The stdio version (src/stdio.ts) is untouched — this file only adds
  * the HTTP transport for the live deployment.
  */
 
@@ -27,7 +27,7 @@ import {
   createPortfolioServer,
   SERVER_NAME,
   SERVER_VERSION,
-} from "../src/server.js";
+} from "../src/portfolio.js";
 
 /** Vercel's Node request: a standard IncomingMessage, plus a parsed
  *  JSON body on `body` when Vercel's body parser ran. */
