@@ -2,9 +2,9 @@
 
 Portfolio MCP server for **Muhammad Sarim** — exposes his verified
 profile and projects through exactly 3 tools. It runs in two modes
-that share the same server code (`src/server.ts`):
+that share the same server code (`src/portfolio.ts`):
 
-- **Local stdio** (`src/index.ts`) — for Claude Code / Claude Desktop
+- **Local stdio** (`src/stdio.ts`) — for Claude Code / Claude Desktop
   on your own machine. This is the original mode and still works
   exactly as before.
 - **Streamable HTTP** (`api/mcp.ts`) — for the live Vercel deployment,
@@ -38,14 +38,14 @@ npm run build
 npm start
 ```
 
-`npm start` runs the server over stdio (`node dist/index.js`). It prints
+`npm start` runs the server over stdio (`node dist/stdio.js`). It prints
 nothing to stdout except MCP protocol messages; the startup line goes to
 stderr. Stop it with Ctrl+C.
 
 ## Use in Claude Code (local stdio)
 
 ```bash
-claude mcp add sarim-portfolio -- node /home/hatch/workspace/mcp-servers/sarim-portfolio-mcp/dist/index.js
+claude mcp add sarim-portfolio -- node /home/hatch/workspace/mcp-servers/sarim-portfolio-mcp/dist/stdio.js
 ```
 
 Then restart Claude Code (or run `/mcp` inside it) and ask it, e.g.
@@ -61,7 +61,7 @@ Add this to your Claude Desktop config (`claude_desktop_config.json`):
   "mcpServers": {
     "sarim-portfolio": {
       "command": "node",
-      "args": ["/home/hatch/workspace/mcp-servers/sarim-portfolio-mcp/dist/index.js"]
+      "args": ["/home/hatch/workspace/mcp-servers/sarim-portfolio-mcp/dist/stdio.js"]
     }
   }
 }
