@@ -2,13 +2,13 @@
 /**
  * sarim-portfolio-mcp — local HTTP entry point.
  *
- * Runs the SAME shared Portfolio MCP server (see ./server.ts) over
+ * Runs the SAME shared Portfolio MCP server (see ./portfolio.ts) over
  * Streamable HTTP, in stateless mode — the mode Vercel serverless
  * functions need, because they keep no state between requests.
  * A fresh server + transport is created for every POST request.
  *
  * This is for local testing of the live (Vercel) version only.
- * The stdio version in ./index.ts is untouched and still the way
+ * The stdio version in ./stdio.ts is untouched and still the way
  * Claude Code / Claude Desktop use the server locally.
  *
  * Usage:
@@ -32,7 +32,7 @@ import {
   createPortfolioServer,
   SERVER_NAME,
   SERVER_VERSION,
-} from "./server.js";
+} from "./portfolio.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
